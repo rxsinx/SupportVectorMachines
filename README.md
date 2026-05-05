@@ -1,2 +1,0 @@
-# SupportVectorMachines
-Support Vector Machine
