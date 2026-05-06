@@ -1,68 +1,59 @@
-# core/kite_client.py — Zerodha Kite Connect data layer
+# core/kite_client.py
 from __future__ import annotations
-
 import os
 from datetime import datetime, timedelta
-
 import pandas as pd
 import streamlit as st
 
 _EXCHANGE = "NSE"
 
 
-@st.cache_resource(ttl=3600)
-def get_kite_session(api_key: str, access_token: str):
-    """
-    Build and cache a KiteConnect session for the lifetime of the server process.
-    Returns the KiteConnect object or raises on invalid credentials.
-    """
+def build_unauthenticated_kite(api_key: str):
     try:
         from kiteconnect import KiteConnect
     except ImportError as exc:
-        raise ImportError(
-            "kiteconnect package not installed. Run:  pip install kiteconnect"
-        ) from exc
+        raise ImportError("Run: pip install kiteconnect") from exc
+    return KiteConnect(api_key=api_key)
 
+
+def get_login_url(api_key: str) -> str:
+    return build_unauthenticated_kite(api_key).login_url()
+
+
+def generate_access_token(api_key: str, api_secret: str, request_token: str):
+    """
+    Exchange request_token → access_token.
+    Returns (access_token_str, session_dict).
+    """
+    kite = build_unauthenticated_kite(api_key)
+    session = kite.generate_session(
+        request_token=request_token.strip(),
+        api_secret=api_secret.strip(),
+    )
+    return session["access_token"], session
+
+
+@st.cache_resource(ttl=82800)   # 23 h — tokens expire midnight IST
+def get_kite_session(api_key: str, access_token: str):
+    from kiteconnect import KiteConnect
     kc = KiteConnect(api_key=api_key)
     kc.set_access_token(access_token)
-    # Lightweight sanity-check — will raise on bad token
-    kc.profile()
+    kc.profile()   # raises TokenException on stale token
     return kc
 
 
 def resolve_token(kite, symbol: str) -> int:
-    """Return the numeric instrument token for NSE:<symbol>."""
-    key = f"{_EXCHANGE}:{symbol}"
+    key  = f"{_EXCHANGE}:{symbol}"
     data = kite.ltp([key])
     if key not in data:
-        raise ValueError(f"Symbol '{symbol}' not found on {_EXCHANGE}.")
+        raise ValueError(f"Symbol '{symbol}' not found on NSE.")
     return data[key]["instrument_token"]
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def fetch_ohlcv(
-    _kite,          # leading underscore keeps st.cache_data from hashing the object
-    symbol: str,
-    days: int = 252,
-    interval: str = "day",
-) -> pd.DataFrame:
-    """
-    Pull OHLCV history from Kite Connect.
-
-    Parameters
-    ----------
-    symbol   : NSE ticker, e.g. "RELIANCE"
-    days     : number of *trading* sessions required
-    interval : Kite interval string — "day", "60minute", etc.
-
-    Returns
-    -------
-    pd.DataFrame with columns [open, high, low, close, volume]
-    indexed by timezone-naive datetime, sorted ascending.
-    """
+def fetch_ohlcv(_kite, symbol: str, days: int = 252, interval: str = "day") -> pd.DataFrame:
     token     = resolve_token(_kite, symbol)
     to_date   = datetime.now()
-    # Buffer ≈ 1.5× to account for weekends / NSE holidays
     from_date = to_date - timedelta(days=int(days * 1.55))
 
     raw = _kite.historical_data(
@@ -71,36 +62,34 @@ def fetch_ohlcv(
         to_date=to_date,
         interval=interval,
     )
-
     if not raw:
-        raise RuntimeError(
-            f"No data returned for {symbol}. "
-            "Check if the market is open or try a larger day range."
-        )
+        raise RuntimeError(f"No data returned for {symbol}.")
 
     df = pd.DataFrame(raw)
     df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
     df = (
         df.set_index("date")
-        [["open", "high", "low", "close", "volume"]]
-        .sort_index()
-        .tail(days)
+          [["open", "high", "low", "close", "volume"]]
+          .sort_index()
+          .tail(days)
     )
     return df
 
 
 def get_ltp(kite, symbol: str) -> float:
-    """Return the last traded price for a single symbol."""
     key  = f"{_EXCHANGE}:{symbol}"
     data = kite.ltp([key])
     return data[key]["last_price"]
 
 
-def get_credentials_from_env() -> tuple[str | None, str | None]:
-    """Read API key + access token from environment / .env file."""
-    from dotenv import load_dotenv
-    load_dotenv()
-    return (
-        os.getenv("KITE_API_KEY"),
-        os.getenv("KITE_ACCESS_TOKEN"),
+def get_credentials_from_env() -> dict:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+    return dict(
+        api_key      = os.getenv("KITE_API_KEY"),
+        api_secret   = os.getenv("KITE_API_SECRET"),
+        access_token = os.getenv("KITE_ACCESS_TOKEN"),
     )
