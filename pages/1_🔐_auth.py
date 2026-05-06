@@ -1,82 +1,176 @@
-# pages/1_🔐_auth.py — Kite Connect authentication
+# pages/1_🔐_auth.py
+from __future__ import annotations
 import streamlit as st
 from config import APP_ICON, APP_TITLE
-from core.kite_client import get_credentials_from_env, get_kite_session
-
-st.set_page_config(
-    page_title=f"Auth — {APP_TITLE}",
-    page_icon=APP_ICON,
-    layout="centered",
+from core.kite_client import (
+    generate_access_token,
+    get_credentials_from_env,
+    get_kite_session,
+    get_login_url,
 )
 
+st.set_page_config(page_title=f"Auth — {APP_TITLE}", page_icon=APP_ICON, layout="centered")
+
 st.title("🔑  Kite Connect — Authentication")
-st.caption("Your credentials are stored only in Streamlit session state "
-           "and are never written to disk from this page.")
+st.caption("Credentials are stored only in session state, never written to disk.")
 
-# ── Auto-load from .env ──────────────────────────────────────────────────────
-auto_key, auto_token = get_credentials_from_env()
-if auto_key and auto_token:
-    st.success("✔  Credentials detected in `.env` file.  "
-               "You can use them directly or override below.")
+env         = get_credentials_from_env()
+url_params  = st.query_params
+auto_rtoken = url_params.get("request_token", "")
+auto_status = url_params.get("status", "")
 
-# ── Manual entry ─────────────────────────────────────────────────────────────
-with st.form("kite_auth_form"):
-    st.markdown("#### Enter Credentials")
+if auto_rtoken and auto_status == "success":
+    st.success("✔  request_token detected in URL — scroll to Step 3.")
+elif auto_status == "error":
+    st.error("Kite login failed or was cancelled. Please try again.")
+
+# ── STEP 1 ───────────────────────────────────────────────────────────
+st.markdown("---")
+st.subheader("Step 1 — API Key & Secret")
+st.caption("Find both at kite.trade/connect/apps → your app.")
+
+col1, col2 = st.columns(2)
+with col1:
     api_key = st.text_input(
-        "API Key",
-        type="password",
-        value=st.session_state.get("api_key", auto_key or ""),
-        placeholder="e.g. abcdef1234567890",
+        "API Key", type="password",
+        value=st.session_state.get("api_key", env["api_key"] or ""),
+        placeholder="abcdef1234567890",
     )
-    access_token = st.text_input(
-        "Access Token",
-        type="password",
-        value=st.session_state.get("access_token", auto_token or ""),
-        placeholder="Paste your daily access token here",
+with col2:
+    api_secret = st.text_input(
+        "API Secret", type="password",
+        value=st.session_state.get("api_secret", env["api_secret"] or ""),
+        placeholder="••••••••••••••••",
     )
-    submitted = st.form_submit_button("🔗  Connect to Kite", type="primary",
-                                       use_container_width=True)
 
-if submitted:
-    if not api_key or not access_token:
-        st.error("Both API Key and Access Token are required.")
-    else:
-        with st.spinner("Verifying with Kite Connect …"):
+if api_key:    st.session_state["api_key"]    = api_key
+if api_secret: st.session_state["api_secret"] = api_secret
+
+# ── STEP 2 ───────────────────────────────────────────────────────────
+st.markdown("---")
+st.subheader("Step 2 — Log in via Kite")
+st.caption(
+    "Click to open the Zerodha login page. After login, Kite redirects to "
+    "your Redirect URL with  ?request_token=XXXX&status=success  in the URL. "
+    "Copy that token for Step 3."
+)
+
+if st.button("🔗  Generate Login URL", type="primary",
+             disabled=not (api_key and api_secret)):
+    try:
+        st.session_state["login_url"] = get_login_url(api_key)
+    except Exception as exc:
+        st.error(f"Could not build login URL: {exc}")
+
+if "login_url" in st.session_state:
+    url = st.session_state["login_url"]
+    st.markdown(
+        f'<a href="{url}" target="_blank">'
+        f'<button style="background:#ff8c00;color:#0b0f14;border:none;'
+        f'padding:10px 20px;border-radius:6px;font-weight:700;cursor:pointer;">'
+        f'↗  Open Kite Login</button></a>',
+        unsafe_allow_html=True,
+    )
+    st.code(url, language=None)
+
+# ── STEP 3 ───────────────────────────────────────────────────────────
+st.markdown("---")
+st.subheader("Step 3 — Generate Access Token")
+st.caption(
+    "Paste the request_token from the redirect URL. "
+    "It is single-use — if this fails, go back to Step 2 and log in again."
+)
+
+request_token = st.text_input(
+    "request_token  (from redirect URL)",
+    value=auto_rtoken or st.session_state.get("request_token", ""),
+    placeholder="Paste request_token here …",
+)
+if request_token:
+    st.session_state["request_token"] = request_token
+
+if st.button("✅  Generate Session", type="primary",
+             disabled=not (api_key and api_secret and request_token)):
+    with st.spinner("Exchanging request_token for access_token …"):
+        try:
+            access_token, session_data = generate_access_token(
+                api_key, api_secret, request_token
+            )
+            kite = get_kite_session(api_key, access_token)   # verify + cache
+
+            st.session_state["access_token"]  = access_token
+            st.session_state["kite_profile"]  = session_data
+            st.session_state["auth_complete"] = True
+            st.query_params.clear()
+
+            st.success(
+                f"✔  Session active for "
+                f"**{session_data.get('user_name','?')}** "
+                f"({session_data.get('email','')})"
+            )
+            st.balloons()
+
+        except Exception as exc:
+            st.error(
+                f"**Session generation failed:** {exc}\n\n"
+                "Common causes:\n"
+                "- request_token already used (single-use) — log in again\n"
+                "- API Secret incorrect\n"
+                "- request_token older than 5 minutes"
+            )
+
+# ── Active session panel ──────────────────────────────────────────────
+if st.session_state.get("auth_complete"):
+    prof = st.session_state.get("kite_profile", {})
+    st.markdown("---")
+    st.subheader("✅  Active Session")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Name",    prof.get("user_name", "—"))
+    c2.metric("User ID", prof.get("user_id",   "—"))
+    c3.metric("Broker",  prof.get("broker",    "—"))
+    c4.metric("Email",   prof.get("email",     "—"))
+
+    if st.button("🚪  Clear Session"):
+        for k in ["api_key","api_secret","access_token",
+                  "kite_profile","auth_complete","login_url","request_token"]:
+            st.session_state.pop(k, None)
+        st.rerun()
+
+# ── .env shortcut ─────────────────────────────────────────────────────
+elif env.get("access_token"):
+    st.markdown("---")
+    st.info("A KITE_ACCESS_TOKEN was found in your .env file. Click to verify it.")
+    if st.button("⚡  Use token from .env"):
+        with st.spinner("Verifying …"):
             try:
-                kite = get_kite_session(api_key, access_token)
+                kite    = get_kite_session(env["api_key"], env["access_token"])
                 profile = kite.profile()
-                st.session_state["api_key"]      = api_key
-                st.session_state["access_token"] = access_token
-                st.session_state["kite_profile"] = profile
-                st.success(
-                    f"✔  Connected as **{profile.get('user_name', 'Unknown')}** "
-                    f"({profile.get('email', '')})"
-                )
-                st.balloons()
+                st.session_state.update({
+                    "api_key": env["api_key"],
+                    "api_secret": env.get("api_secret",""),
+                    "access_token": env["access_token"],
+                    "kite_profile": profile,
+                    "auth_complete": True,
+                })
+                st.success(f"✔  Logged in as **{profile.get('user_name','?')}**")
+                st.rerun()
             except Exception as exc:
-                st.error(f"Connection failed: {exc}")
+                st.error(f"Token invalid or expired: {exc}")
 
-# ── Profile display ──────────────────────────────────────────────────────────
-if "kite_profile" in st.session_state:
-    prof = st.session_state["kite_profile"]
-    st.divider()
-    st.subheader("Session Profile")
-    cols = st.columns(3)
-    cols[0].metric("Name",    prof.get("user_name", "—"))
-    cols[1].metric("Broker",  prof.get("broker",    "—"))
-    cols[2].metric("User ID", prof.get("user_id",   "—"))
+# ── Reference ─────────────────────────────────────────────────────────
+with st.expander("📖  How Kite OAuth works"):
+    st.code("""
+Step 1  You provide:  API Key + API Secret   (from kite.trade/connect/apps)
 
-# ── How to get credentials ───────────────────────────────────────────────────
-with st.expander("ℹ  How to get your Kite API credentials"):
-    st.markdown("""
-1. Log in at [kite.trade/connect/apps](https://kite.trade/connect/apps)
-2. Create an app (or use an existing one) — note the **API Key** and **API Secret**
-3. On each trading day, generate a new **Access Token** via the Kite login flow  
-   *(Access tokens expire at midnight IST)*
-4. Paste both values above, or save them in your `.env` file:
+Step 2  App builds:   login_url = kite.login_url()
+        You visit →   log in with Zerodha credentials + 2FA
+        Kite redirects to your Redirect URL with:
+                      ?request_token=XXXX&status=success
 
-```bash
-KITE_API_KEY=your_key_here
-KITE_ACCESS_TOKEN=your_token_here
-```
-""")
+Step 3  App calls:    kite.generate_session(request_token, api_secret)
+        Returns:      access_token  ← valid until midnight IST
+                      + user_name, email, user_id …
+
+        request_token = SINGLE USE. If Step 3 fails, repeat Step 2.
+        access_token  = expires MIDNIGHT IST. Repeat daily.
+""", language=None)
