@@ -15,23 +15,24 @@ def render_credential_form() -> tuple[str, str]:
     Returns (api_key, access_token) — may be empty strings.
     """
     st.sidebar.markdown("### 🔑 Kite Credentials")
-    with st.sidebar.expander("Enter API credentials", expanded=False):
-        api_key = st.text_input(
-            "API Key", type="password", key="sb_api_key",
-            value=st.session_state.get("api_key", ""),
+    api_key      = st.session_state.get("api_key", "")
+    access_token = st.session_state.get("access_token", "")
+
+    if api_key and access_token and st.session_state.get("auth_complete"):
+        prof = st.session_state.get("kite_profile", {})
+        st.sidebar.success(
+            f"✔  {prof.get('user_name', 'Connected')}\n\n"
+            f"{prof.get('user_id', '')}"
         )
-        access_token = st.text_input(
-            "Access Token", type="password", key="sb_access_token",
-            value=st.session_state.get("access_token", ""),
+    else:
+        st.sidebar.warning("Not authenticated")
+        st.sidebar.page_link(
+            "pages/1_🔐_auth.py",
+            label="→  Go to Auth page",
+            icon="🔐",
         )
-        if st.button("Connect", key="sb_connect"):
-            st.session_state["api_key"]      = api_key
-            st.session_state["access_token"] = access_token
-            st.rerun()
-    return (
-        st.session_state.get("api_key", ""),
-        st.session_state.get("access_token", ""),
-    )
+
+    return api_key, access_token
 
 
 def render_symbol_picker() -> str:
