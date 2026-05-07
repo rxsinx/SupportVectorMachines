@@ -165,7 +165,7 @@ with tab3:
     classification_report_table(result.report)
 
 # ── Tab 4 — Feature importance ──
-# ── Tab 4 — Feature importance ──
+
 with tab4:
     st.subheader("Permutation Feature Importance")
     st.caption(
@@ -191,7 +191,7 @@ with tab4:
     st.plotly_chart(feature_importance_bar(importances), use_container_width=True)
     
 # ── Tab 5 — C sensitivity ──
-# ── Tab 5 — C sensitivity ──
+
 with tab5:
     st.subheader("Margin Width Sensitivity  (C sweep)")
     st.caption("Sweeps C on a log scale. Cached after first run.")
@@ -225,28 +225,3 @@ if save_model_flag:
     path = save_model(result, symbol)
     st.sidebar.success(f"Model saved → `{path}`")
 
-# ─── Create a dedicated area for the real-time signal ─────────
-
-import time
-live_monitor = st.empty()
-
-if st.session_state.get('model_trained'):
-    while True:
-        with live_monitor.container():
-            # 1. Get latest price from session_state (updated by Ticker)
-            current_price = st.session_state.latest_price
-            
-            # 2. Re-calculate your 20 features using the new price
-            # (Append current_price to your historical OHLC dataframe)
-            latest_features = prepare_live_features(df, current_price)
-            
-            # 3. Predict
-            prediction = model.predict(latest_features)
-            conf = model.predict_proba(latest_features)
-            
-            # 4. Update UI
-            st.metric("Live Price", f"₹{current_price}", delta=...)
-            st.subheader(f"Current Signal: {'BULL' if prediction == 1 else 'BEAR'}")
-            st.progress(conf)
-            
-        time.sleep(1) # Refresh UI every second
