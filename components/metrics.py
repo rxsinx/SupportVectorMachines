@@ -59,19 +59,33 @@ def signal_badge(signal_info: dict) -> None:
 
 
 def classification_report_table(report_text: str) -> None:
-    """Parse sklearn classification_report string into an st.dataframe."""
     import pandas as pd
     rows = []
     for line in report_text.strip().splitlines()[2:]:
+        line = line.strip()
+        if not line:
+            continue
         parts = line.split()
-        if len(parts) >= 5:
+        if len(parts) < 4:
+            continue
+        try:
+            # Parse from the RIGHT — last 4 tokens are always
+            # precision  recall  f1  support regardless of class name length
+            support   = int(float(parts[-1]))
+            f1        = float(parts[-2])
+            recall    = float(parts[-3])
+            precision = float(parts[-4])
+            label     = " ".join(parts[:-4])   # handles "weighted avg" etc.
             rows.append({
-                "Class":     parts[0],
-                "Precision": float(parts[1]),
-                "Recall":    float(parts[2]),
-                "F1":        float(parts[3]),
-                "Support":   int(parts[4]),
+                "Class":     label,
+                "Precision": precision,
+                "Recall":    recall,
+                "F1":        f1,
+                "Support":   support,
             })
+        except (ValueError, IndexError):
+            continue
+
     if rows:
         df = pd.DataFrame(rows).set_index("Class")
         st.dataframe(
@@ -80,7 +94,6 @@ def classification_report_table(report_text: str) -> None:
               .background_gradient(subset=["F1"], cmap="RdYlGn"),
             use_container_width=True,
         )
-
 
 def kernel_explainer(kernel: str) -> None:
     """Inline markdown explanation of the chosen kernel."""
