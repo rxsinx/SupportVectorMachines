@@ -110,7 +110,7 @@ def render_svm_controls() -> dict:
         min_value=0.05, max_value=0.40,
         value=TEST_RATIO_DEFAULT,
         step=0.05, key="sb_test_ratio",
-        format="%.0%%",
+        format="%.0f%%",
     )
 
     forward_days = st.sidebar.slider(
