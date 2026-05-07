@@ -105,7 +105,7 @@ if st.button("▶  Run Scanner", type="primary", use_container_width=True) or au
 
     styled = (
         df_res.style
-        .applymap(color_signal, subset=["Signal"])
+        .map(color_signal, subset=["Signal"])
         .format({
             "LTP":        "₹{:,.2f}",
             "P(Bull)":    "{:.1%}",
