@@ -105,7 +105,7 @@ def render_svm_controls() -> dict:
         help="252 ≈ 1 calendar year of NSE trading sessions.",
     )
 
-    test_ratio = st.sidebar.slider(
+    test_ratio_int = st.sidebar.slider(
         "Test set %",
         min_value=5,
         max_value=40,
