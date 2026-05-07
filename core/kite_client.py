@@ -102,3 +102,15 @@ def get_credentials_from_env() -> dict:
         api_secret   = os.getenv("KITE_API_SECRET"),
         access_token = os.getenv("KITE_ACCESS_TOKEN"),
     )
+
+from kiteconnect import KiteTicker
+
+def start_stream(api_key, access_token, instrument_token):
+    kws = KiteTicker(api_key, access_token)
+
+    def on_ticks(ws, ticks):
+        # Update a global variable or a shared queue with the latest LTP
+        st.session_state.latest_price = ticks[0]['last_price']
+
+    kws.on_ticks = on_ticks
+    kws.connect(threaded=True)
