@@ -74,7 +74,7 @@ def render_svm_controls() -> dict:
         step=0.05,
         key="sb_C",
         help="Low C → wide margin (softer).  High C → narrow margin (tighter fit).",
-        format="%d%%",
+        format=".1f%%",
     )
 
     gamma_str = st.sidebar.selectbox(
