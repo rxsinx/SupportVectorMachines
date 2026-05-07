@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
+from kiteconnect import KiteTicker
 
 _EXCHANGE = "NSE"
 
@@ -103,7 +104,6 @@ def get_credentials_from_env() -> dict:
         access_token = os.getenv("KITE_ACCESS_TOKEN"),
     )
 
-from kiteconnect import KiteTicker
 
 def start_stream(api_key, access_token, instrument_token):
     kws = KiteTicker(api_key, access_token)
