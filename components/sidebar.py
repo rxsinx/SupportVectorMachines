@@ -107,11 +107,14 @@ def render_svm_controls() -> dict:
 
     test_ratio = st.sidebar.slider(
         "Test set %",
-        min_value=0.05, max_value=0.40,
-        value=TEST_RATIO_DEFAULT,
-        step=0.05, key="sb_test_ratio",
-        format="%.0f%%",
+        min_value=5,
+        max_value=40,
+        value=20,
+        step=5,
+        format="%d%%" # This will correctly show 5%, 10%, etc.
     )
+    # Convert back to decimal for the model
+    test_ratio = test_ratio_int / 100.0
 
     forward_days = st.sidebar.slider(
         "Label horizon (forward days)",
