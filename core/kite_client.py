@@ -43,12 +43,20 @@ def get_kite_session(api_key: str, access_token: str):
 
 
 def resolve_token(kite, symbol: str) -> int:
-    key  = f"{_EXCHANGE}:{symbol}"
-    data = kite.ltp([key])
-    if key not in data:
-        raise ValueError(f"Symbol '{symbol}' not found on NSE.")
-    return data[key]["instrument_token"]
-
+    """
+    Return the numeric instrument token for a symbol.
+    Handles NSE indices (NIFTY50, BANKNIFTY) which need special exchange strings.
+    """
+    from config import INDEX_MAP
+    # Use mapped exchange string if it's a known index, else default NSE
+    exchange_key = INDEX_MAP.get(symbol.upper(), f"{_EXCHANGE}:{symbol}")
+    data = kite.ltp([exchange_key])
+    if exchange_key not in data:
+        raise ValueError(
+            f"Symbol '{symbol}' not found. "
+            f"Tried key: '{exchange_key}'. Check the NSE ticker spelling."
+        )
+    return data[exchange_key]["instrument_token"]
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_ohlcv(_kite, symbol: str, days: int = 252, interval: str = "day") -> pd.DataFrame:
@@ -77,9 +85,10 @@ def fetch_ohlcv(_kite, symbol: str, days: int = 252, interval: str = "day") -> p
 
 
 def get_ltp(kite, symbol: str) -> float:
-    key  = f"{_EXCHANGE}:{symbol}"
-    data = kite.ltp([key])
-    return data[key]["last_price"]
+    from config import INDEX_MAP
+    exchange_key = INDEX_MAP.get(symbol.upper(), f"{_EXCHANGE}:{symbol}")
+    data = kite.ltp([exchange_key])
+    return data[exchange_key]["last_price"]
 
 
 def get_credentials_from_env() -> dict:
