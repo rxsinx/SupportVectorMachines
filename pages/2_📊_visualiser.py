@@ -165,45 +165,60 @@ with tab3:
     classification_report_table(result.report)
 
 # ── Tab 4 — Feature importance ──
+# ── Tab 4 — Feature importance ──
 with tab4:
     st.subheader("Permutation Feature Importance")
     st.caption(
-        "Each feature is shuffled independently; the drop in accuracy estimates its importance. "
-        "Uses the full dataset (train + test)."
-    )
-    with st.spinner("Computing permutation importance (5 repeats) …"):
-        importances = compute_permutation_importance(result, X, y)
-    st.plotly_chart(
-        feature_importance_bar(importances),
-        use_container_width=True,
+        "Each feature is shuffled; drop in accuracy estimates importance. "
+        "Cached after first run."
     )
 
+    @st.cache_data(show_spinner=False)
+    def _get_importance(_result, _X, _y):
+        from sklearn.inspection import permutation_importance
+        pi = permutation_importance(
+            _result.model,
+            _result.scaler.transform(_X),
+            _y,
+            n_repeats=3,        # reduced from 5 → faster
+            random_state=42,
+            n_jobs=-1,
+        )
+        return pi.importances_mean
+
+    with st.spinner("Computing permutation importance …"):
+        importances = _get_importance(result, X, y)
+    st.plotly_chart(feature_importance_bar(importances), use_container_width=True)
+    
+# ── Tab 5 — C sensitivity ──
 # ── Tab 5 — C sensitivity ──
 with tab5:
     st.subheader("Margin Width Sensitivity  (C sweep)")
-    st.caption(
-        "Sweep C across a log-scale range and show how test accuracy and "
-        "support-vector count change.  Your current C is highlighted."
-    )
-    c_vals = sorted(set([
-        0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0
-    ] + [params["C"]]))
+    st.caption("Sweeps C on a log scale. Cached after first run.")
 
-    acc_list, sv_list = [], []
-    prog = st.progress(0, text="Sweeping C …")
-    for i, c_val in enumerate(c_vals):
-        r = train_svm(X_tr, y_tr, X_te, y_te, X,
-                      kernel=params["kernel"], C=c_val,
-                      gamma=params["gamma"], degree=params["degree"])
-        acc_list.append(r.acc_test)
-        sv_list.append(r.n_sv)
-        prog.progress((i + 1) / len(c_vals), text=f"C = {c_val}")
-    prog.empty()
+    # Reduced sweep — 8 points instead of 12
+    c_vals = sorted({0.01, 0.1, 0.5, 1.0, 2.0, 10.0, 50.0, 100.0, params["C"]})
 
-    st.plotly_chart(
-        c_sensitivity_chart(c_vals, acc_list, sv_list),
-        use_container_width=True,
-    )
+    @st.cache_data(show_spinner=False)
+    def _c_sweep(_X_tr, _y_tr, _X_te, _y_te, _X, kernel, gamma, degree, c_vals):
+        acc_list, sv_list = [], []
+        for c_val in c_vals:
+            r = train_svm(_X_tr, _y_tr, _X_te, _y_te, _X,
+                          kernel=kernel, C=c_val,
+                          gamma=gamma, degree=degree)
+            acc_list.append(r.acc_test)
+            sv_list.append(r.n_sv)
+        return acc_list, sv_list
+
+    with st.spinner("Sweeping C values …"):
+        acc_list, sv_list = _c_sweep(
+            X_tr, y_tr, X_te, y_te, X,
+            params["kernel"], params["gamma"], params["degree"],
+            tuple(c_vals),
+        )
+    st.plotly_chart(c_sensitivity_chart(c_vals, acc_list, sv_list),
+                    use_container_width=True)
+
 
 # ─── Save model ──────────────────────────────────────────────────────────────
 if save_model_flag:
