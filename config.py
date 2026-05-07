@@ -30,10 +30,19 @@ DAYS_DEFAULT     = 252
 TEST_RATIO_DEFAULT = 0.20
 
 # ─── Popular NSE tickers for quick-pick ────────────────────────────────────────
+# Add after QUICK_PICK_SYMBOLS
+INDEX_MAP = {
+    "NIFTY50":     "NSE:NIFTY 50",
+    "BANKNIFTY":   "NSE:NIFTY BANK",
+    "FINNIFTY":    "NSE:NIFTY FIN SERVICE",
+
+}
+
 QUICK_PICK_SYMBOLS = [
     "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK",
     "WIPRO", "HINDUNILVR", "SBIN", "BAJFINANCE", "MARUTI",
     "AXISBANK", "KOTAKBANK", "LT", "TITAN", "ASIANPAINT",
+    "NIFTY50", "BANKNIFTY", "FINNIFTY",
 ]
 
 # ─── Feature labels (matches features.py order) ────────────────────────────────
