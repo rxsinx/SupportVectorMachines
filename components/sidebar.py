@@ -111,6 +111,7 @@ def render_svm_controls() -> dict:
         max_value=40,
         value=20,
         step=5,
+        key="sb_test_ratio",
         format="%d%%" # This will correctly show 5%, 10%, etc.
     )
     # Convert back to decimal for the model
