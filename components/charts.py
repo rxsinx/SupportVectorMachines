@@ -32,7 +32,12 @@ def _mpl_dark():
 
 # ─── Main SVM scatter ─────────────────────────────────────────────────────────
 
-def svm_scatter(result, X_all, y_all, symbol, live_point_2d=None):
+def svm_scatter(
+    result, 
+    X_all: np.ndarray,
+    y_all: np.ndarray, symbol: str,
+    live_point_2d=None
+) :-> plt.Figure:
     """
     2-D PCA projection of feature space with SVM decision boundary,
     margin lines, support-vector rings, and coloured region fills.
@@ -109,18 +114,7 @@ def svm_scatter(result, X_all, y_all, symbol, live_point_2d=None):
         fontsize=12, pad=10, color=P["text"],
     )
 
-    handles = [
-        mpatches.Patch(color=P["bull_dot"],  label=f"Bull days ({bull.sum()})"),
-        mpatches.Patch(color=P["bear_dot"],  label=f"Bear days ({bear.sum()})"),
-        mpatches.Patch(facecolor="none",
-                       edgecolor=P["sv_ring"], label=f"Support vectors ({len(sv)})"),
-        mpatches.Patch(color=P["boundary"],  label="Decision boundary"),
-        mpatches.Patch(color=P["margin_line"], label="Margin ±1"),
-    ]
-    ax.legend(handles=handles, loc="lower right",
-              facecolor=P["panel"], edgecolor=P["grid"],
-              labelcolor=P["text"], fontsize=9)
-
+    
     # ── Live market dot ──────────────────────────────────────────────
     if live_point_2d is not None:
         lx, ly = float(live_point_2d[0]), float(live_point_2d[1])
@@ -151,6 +145,50 @@ def svm_scatter(result, X_all, y_all, symbol, live_point_2d=None):
                       facecolor=dot_color, alpha=0.7, edgecolor="none"),
         )
     
+    if live_point_2d is not None:
+        try:
+            lx = float(live_point_2d[0])
+            ly = float(live_point_2d[1])
+            df_val     = float(vis.decision_function([[lx, ly]])[0])
+            dot_color  = P["bull_dot"] if df_val > 0 else P["bear_dot"]
+            side_label = "BULL" if df_val > 0 else "BEAR"
+            ax.scatter(lx, ly, s=480, facecolors="none",
+                       edgecolors="#ffffff", linewidths=1.5,
+                       zorder=6, alpha=0.35)
+            ax.scatter(lx, ly, s=260, facecolors="none",
+                       edgecolors=dot_color, linewidths=2.8, zorder=7)
+            ax.scatter(lx, ly, s=90, c="#ffffff",
+                       edgecolors="none", zorder=8)
+            ax.annotate(
+                f"◀ LIVE  {side_label}  ({df_val:+.2f})",
+                xy=(lx, ly),
+                xytext=(lx + 0.35, ly + 0.35),
+                color="#ffffff", fontsize=8, fontfamily="monospace",
+                arrowprops=dict(arrowstyle="->", color="#ffffff", lw=1.2),
+                zorder=9,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor=dot_color,
+                          alpha=0.75, edgecolor="none"),
+            )
+        except Exception:
+            pass
+
+    handles = [
+        mpatches.Patch(color=P["bull_dot"], label=f"Bull days ({bull.sum()})"),
+        mpatches.Patch(color=P["bear_dot"], label=f"Bear days ({bear.sum()})"),
+        mpatches.Patch(facecolor="none", edgecolor=P["sv_ring"],
+                       label=f"Support vectors ({len(sv)})"),
+        mpatches.Patch(color=P["boundary"],  label="Decision boundary"),
+        mpatches.Patch(color=P["margin_line"], label="Margin ±1"),
+    ]
+    if live_point_2d is not None:
+        handles.append(
+            mpatches.Patch(facecolor="none", edgecolor="#ffffff",
+                           label="Live market position")
+        )
+    ax.legend(handles=handles, loc="lower right",
+              facecolor=P["panel"], edgecolor=P["grid"],
+              labelcolor=P["text"], fontsize=9)
+
     plt.tight_layout()
     return fig
 
