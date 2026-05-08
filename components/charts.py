@@ -32,12 +32,7 @@ def _mpl_dark():
 
 # ─── Main SVM scatter ─────────────────────────────────────────────────────────
 
-def svm_scatter(
-    result,            # SVMResult from core/model.py
-    X_all: np.ndarray,
-    y_all: np.ndarray,
-    symbol: str,
-) -> plt.Figure:
+def svm_scatter(result, X_all, y_all, symbol, live_point_2d=None):
     """
     2-D PCA projection of feature space with SVM decision boundary,
     margin lines, support-vector rings, and coloured region fills.
@@ -126,6 +121,36 @@ def svm_scatter(
               facecolor=P["panel"], edgecolor=P["grid"],
               labelcolor=P["text"], fontsize=9)
 
+    # ── Live market dot ──────────────────────────────────────────────
+    if live_point_2d is not None:
+        lx, ly = float(live_point_2d[0]), float(live_point_2d[1])
+        # Outer glow ring
+        ax.scatter(lx, ly, s=420, facecolors="none",
+                   edgecolors="#ffffff", linewidths=2.0,
+                   zorder=6, alpha=0.5)
+        # Inner coloured ring (bull/bear colour based on decision function)
+        df_val = vis.decision_function([[lx, ly]])[0]
+        dot_color = P["bull_dot"] if df_val > 0 else P["bear_dot"]
+        ax.scatter(lx, ly, s=220, facecolors="none",
+                   edgecolors=dot_color, linewidths=3.0, zorder=7)
+        # Solid centre dot
+        ax.scatter(lx, ly, s=80, c="#ffffff",
+                   edgecolors="none", zorder=8)
+        # Label
+        side = "BULL" if df_val > 0 else "BEAR"
+        ax.annotate(
+            f"◀ LIVE  {side}  (dist={df_val:+.2f})",
+            xy=(lx, ly),
+            xytext=(lx + 0.25, ly + 0.25),
+            color="#ffffff",
+            fontsize=8.5,
+            fontfamily="monospace",
+            arrowprops=dict(arrowstyle="->", color="#ffffff", lw=1.2),
+            zorder=9,
+            bbox=dict(boxstyle="round,pad=0.3",
+                      facecolor=dot_color, alpha=0.7, edgecolor="none"),
+        )
+    
     plt.tight_layout()
     return fig
 
