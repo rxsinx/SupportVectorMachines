@@ -103,6 +103,25 @@ with st.spinner(
             degree=params["degree"],
         )
 
+    # ── Cache trained objects for live refresh ───────────────────────────
+    from core.model import pca_2d
+    from sklearn.svm import SVC
+    
+    X_2d_full, _pca_obj, _evr = pca_2d(result, X)
+    _vis2d = SVC(kernel=result.kernel, C=result.C, gamma="scale", random_state=42)
+    _vis2d.fit(X_2d_full, y)
+    
+    st.session_state.update({
+        "live_result":  result,
+        "live_X":       X,
+        "live_y":       y,
+        "live_df":      df.copy(),
+        "live_symbol":  symbol,
+        "live_params":  params,
+        "live_pca":     _pca_obj,
+        "live_vis2d":   _vis2d,
+    })
+
 # ─── KPI row ─────────────────────────────────────────────────────────────────
 st.divider()
 st.subheader("Model Performance")
@@ -132,12 +151,95 @@ with tab1:
     st.subheader("SVM Decision Boundary (PCA 2-D Projection)")
     st.caption(
         "The scatter projects the 20-D feature space onto 2 principal components. "
-        "The orange line is the hyperplane; dashed lines are the ±1 margin. "
-        "Rings = support vectors."
+        "Orange line = hyperplane · dashed = ±1 margin · rings = support vectors · "
+        "⚪ white dot = live market position (market hours only)."
     )
-    with st.spinner("Rendering SVM scatter …"):
-        fig_scatter = svm_scatter(result, X, y, symbol)
-    st.pyplot(fig_scatter, use_container_width=True)
+
+    # ── Live mode controls ─────────────────────────────────────────
+    from utils.helpers import nse_market_open
+
+    live_col1, live_col2, live_col3 = st.columns([1, 1, 3])
+    live_mode     = live_col1.toggle("🔴 Live Mode", value=False,
+                                      help="Poll Kite LTP every N seconds and "
+                                           "show current market position on chart")
+    refresh_secs  = live_col2.selectbox("Refresh", [5, 10, 30], index=1,
+                                         label_visibility="collapsed")
+    market_open   = nse_market_open()
+
+    if live_mode and not market_open:
+        st.warning("NSE is currently closed (09:15–15:30 IST Mon–Fri). "
+                   "Live mode will show last available LTP.")
+
+    # ── Compute live point if live mode is on ──────────────────────
+    live_point_2d = None
+    live_signal_text = ""
+
+    if live_mode and "live_pca" in st.session_state:
+        try:
+            from core.kite_client import fetch_ohlcv, get_ltp
+            from core.features import engineer_features, get_xy
+
+            _kite      = get_kite_session(api_key, access_token)
+            _sym       = st.session_state["live_symbol"]
+            _df_hist   = st.session_state["live_df"].copy()
+            _pca       = st.session_state["live_pca"]
+            _res       = st.session_state["live_result"]
+
+            # Get current LTP
+            current_ltp = get_ltp(_kite, _sym)
+
+            # Splice LTP into last row of OHLCV as synthetic "current" close
+            _df_live = _df_hist.copy()
+            _df_live.iloc[-1, _df_live.columns.get_loc("close")] = current_ltp
+            _df_live.iloc[-1, _df_live.columns.get_loc("high")] = max(
+                _df_live.iloc[-1]["high"], current_ltp)
+            _df_live.iloc[-1, _df_live.columns.get_loc("low")] = min(
+                _df_live.iloc[-1]["low"], current_ltp)
+
+            # Recompute features on updated df
+            _feat_live = engineer_features(
+                _df_live,
+                forward_days=st.session_state["live_params"]["forward_days"]
+            )
+            _X_live, _ = get_xy(_feat_live)
+
+            if len(_X_live) > 0:
+                # Scale with the trained scaler, project with stored PCA
+                _x_latest_sc = _res.scaler.transform(_X_live[-1:])
+                live_point_2d = _pca.transform(_x_latest_sc)[0]
+
+                # Signal from full 20-D model
+                _sig = float(_res.model.predict_proba(_x_latest_sc)[0, 1])
+                _label = "▲ BULL" if _sig > 0.5 else "▼ BEAR"
+                live_signal_text = (
+                    f"**Live LTP:** ₹{current_ltp:,.2f}  ·  "
+                    f"**Signal:** {_label}  ·  "
+                    f"**P(Bull):** {_sig:.1%}"
+                )
+
+        except Exception as _e:
+            st.warning(f"Live data error: {_e}")
+
+    # ── Render chart ───────────────────────────────────────────────
+    chart_placeholder = st.empty()
+
+    with chart_placeholder:
+        with st.spinner("Rendering SVM scatter …"):
+            fig_scatter = svm_scatter(
+                result, X, y, symbol,
+                live_point_2d=live_point_2d,
+            )
+        st.pyplot(fig_scatter, use_container_width=True)
+
+    if live_signal_text:
+        st.markdown(live_signal_text)
+
+    # ── Auto-refresh loop ──────────────────────────────────────────
+    if live_mode:
+        import time as _time
+        _time.sleep(refresh_secs)
+        st.rerun()
+
 
 # ── Tab 2 — Price + P(Bull) overlay ──
 with tab2:
