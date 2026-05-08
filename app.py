@@ -94,10 +94,10 @@ df_feat = pd.DataFrame(feat_meta, columns=["Feature", "Category", "Description"]
 df_feat.index = range(1, len(df_feat) + 1)
 st.dataframe(
     df_feat.style
-    .applymap(lambda v: f"color:{P['boundary']};font-weight:600", subset=["Feature"])
-    .applymap(lambda v: f"color:{P['accent']}", subset=["Category"]),
-    use_container_width=True,
-    height=600,
+        .map(lambda v: f"color:{P['boundary']};font-weight:600", subset=["Feature"])
+        .map(lambda v: f"color:{P['accent']}", subset=["Category"]),
+        use_container_width=True,
+        height=600,
 )
 
 # ─── Quick-start guide ────────────────────────────────────────────────────
