@@ -47,11 +47,6 @@ if api_secret: st.session_state["api_secret"] = api_secret
 # ── STEP 2 ───────────────────────────────────────────────────────────
 st.markdown("---")
 st.subheader("Step 2 — Log in via Kite")
-st.caption(
-    "Click to open the Zerodha login page. After login, Kite redirects to "
-    "your Redirect URL with  ?request_token=XXXX&status=success  in the URL. "
-    "Copy that token for Step 3."
-)
 
 if st.button("🔗  Generate Login URL", type="primary",
              disabled=not (api_key and api_secret)):
@@ -74,10 +69,6 @@ if "login_url" in st.session_state:
 # ── STEP 3 ───────────────────────────────────────────────────────────
 st.markdown("---")
 st.subheader("Step 3 — Generate Access Token")
-st.caption(
-    "Paste the request_token from the redirect URL. "
-    "It is single-use — if this fails, go back to Step 2 and log in again."
-)
 
 request_token = st.text_input(
     "request_token  (from redirect URL)",
