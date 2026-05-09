@@ -12,7 +12,6 @@ from core.kite_client import (
 st.set_page_config(page_title=f"Auth — {APP_TITLE}", page_icon=APP_ICON, layout="centered")
 
 st.title("🔑  Kite Connect — Authentication")
-st.caption("Credentials are stored only in session state, never written to disk.")
 
 env         = get_credentials_from_env()
 url_params  = st.query_params
@@ -27,7 +26,6 @@ elif auto_status == "error":
 # ── STEP 1 ───────────────────────────────────────────────────────────
 st.markdown("---")
 st.subheader("Step 1 — API Key & Secret")
-st.caption("Find both at kite.trade/connect/apps → your app.")
 
 col1, col2 = st.columns(2)
 with col1:
