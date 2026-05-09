@@ -175,14 +175,16 @@ with tab1:
     live_col1, live_col2, _ = st.columns([1, 1, 3])
     live_mode    = live_col1.toggle(
         "🔴 Live Mode", value=False, key="live_mode_toggle",
-        help="Polls Kite LTP every N seconds and moves the dot on the chart.",
+        help="Fetches latest price every 15/30/60 min and repositions the live dot.",
     )
-    refresh_secs = live_col2.selectbox(
-        "Refresh interval", [5, 10, 30], index=1,
-        key="live_refresh_secs",
+    refresh_mins = live_col2.selectbox(
+        "Refresh interval", [15, 30, 60], index=0,
+        key="live_refresh_mins",
         label_visibility="collapsed",
+        format_func=lambda x: f"{x} min",
     )
-
+    refresh_secs = refresh_mins * 60
+    
     if live_mode and not nse_market_open():
         st.warning(
             "NSE is currently closed (09:15–15:30 IST Mon–Fri). "
@@ -230,7 +232,7 @@ with tab1:
                     f"**Live LTP:** ₹{current_ltp:,.2f}  ·  "
                     f"**Signal:** {_label}  ·  "
                     f"**P(Bull):** {_prob:.1%}  ·  "
-                    f"**Next refresh in:** {refresh_secs}s"
+                    f"**Next refresh in:** {refresh_mins} min"
                 )
         except Exception as _e:
             st.warning(f"Live data error: {_e}")
